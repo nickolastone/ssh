@@ -4,9 +4,70 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/binary"
+	"encoding/pem"
 
 	"golang.org/x/crypto/ssh"
 )
+
+func GenEd25519Keys(passphrase []byte, memo string) (privateKey []byte, publicKey []byte, err error) {
+	s := &SSHKeyPair{
+		keyType:    Ed25519,
+		passphrase: passphrase,
+		memo:       memo,
+	}
+	err = s.generateEd25519Keys()
+	if err != nil {
+		return
+	}
+	//private without Proc-Type
+	var block *pem.Block
+	block, err = s.pemBlock(s.passphrase)
+	////private with Proc-Type: 4,ENCRYPTED DEK-Info
+	//var privateByte []byte
+	//privateByte, err = x509.MarshalPKCS8PrivateKey(s.privateKey)
+	//if err != nil {
+	//	return
+	//}
+	//block = &pem.Block{
+	//	Type:  "OPENSSH PRIVATE KEY",
+	//	Bytes: privateByte,
+	//}
+	//block, err = x509.EncryptPEMBlock(rand.Reader, block.Type, block.Bytes, s.passphrase, x509.PEMCipherAES256)
+	if err != nil {
+		return
+	}
+	privateKey = pem.EncodeToMemory(block)
+	publicKey = s.PublicKey()
+	return
+}
+
+func GenAuthMethod(signer ssh.Signer) (authMethod ssh.AuthMethod) {
+	return ssh.PublicKeys(signer)
+}
+
+func GenAuthorizedKey(publicKey ssh.PublicKey) (authorizedKey []byte) {
+	return ssh.MarshalAuthorizedKey(publicKey)
+}
+
+func ParseRawPrivateKeyWithPassphrase(privateKey []byte, passphrase []byte) (signer ssh.Signer, err error) {
+	var key interface{}
+	key, err = ssh.ParseRawPrivateKeyWithPassphrase(privateKey, passphrase)
+	if err != nil {
+		return
+	}
+	signer, err = ssh.NewSignerFromKey(key)
+	return
+}
+
+func ParseRawPrivateKey(privateKey []byte) (signer ssh.Signer, err error) {
+	var key interface{}
+	key, err = ssh.ParseRawPrivateKey(privateKey)
+	if err != nil {
+		return
+	}
+	signer, err = ssh.NewSignerFromKey(key)
+	return
+}
 
 func generateSigner() (ssh.Signer, error) {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
